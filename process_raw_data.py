@@ -21,19 +21,22 @@ from config import filenames_dict
 
 print('--- script started:', os.path.basename(__file__), '---')
 
+# INFO: CHANGE PATHS
 ## SETTINGS
-path2dir_in_base = '/home/jj/Projects/YawDyn/Data/raw'
+path2dir_in_base = 'Data/raw'
 # path2dir_in = '/home/jj/Projects/YawDyn/Data/raw/YawDyn_Daten_230601_230801'
-path2dir_out_base = r'/home/jj/Projects/YawDyn/Data/processed'
+path2dir_out_base = r'Data/processed'
 make_dir_if_not_exists(path2dir_out_base)
 # path2dir_in = '/home/jj/Data/Yawdyn/current'
 # path2dir_out = '/home/jj/Data/Yawdyn/current/processed'
 
+# INFO: SELECT WHICH TURBINES TO ANALYZE
 ## SELECT turb ids and quantities to plot,
 turb_ids_to_process = [
     3, 4, 5, 6
 ]
 
+# INFO: SELECT WHICH VARIABLES TO ANALYZE
 # variables to process. need to be strings from quant_keys
 var_keys_to_process = [
     'Power',

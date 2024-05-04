@@ -257,6 +257,7 @@ TKFS = 10 # tick label fontsize (usually the numbers on the axes)
 RASTER_DPI = 600 # raster resolution for saving the figure as file (e.g. .png)
 SCREEN_DPI = 100 # figure resolution for displaying on computer screen
 FONT_FAMILY = 'serif'
+# INFO: CHOOSE FONT (ORIGINAL: CMU Serif / CMU Sans Serif)
 FONT_SERIF = 'CMU Serif'
 FONT_SANS_SERIF = 'CMU Sans Serif'
 MATHTEXT_FONTSET = 'cm'

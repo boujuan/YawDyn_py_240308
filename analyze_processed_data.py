@@ -50,19 +50,22 @@ print('--- script started:', os.path.basename(__file__), '---')
 
 ## CONTROLS
 
+# INFO: CHOOSE WHETHER TO USE 1D AND/OR 2D BINNING
 # --- general usage switch
 bool_use_1D_binned_filtering = 1
 bool_use_2D_binned_filtering = 1
 
+# INFO: CHOOSE WHETHER TO REFILTER DATA (IMPORTANT) THIS WILL GENERATE NEW FILTERED DATA
 # --- filtering: filtering has only to be done once. Data will then be saved to hard disk.
 # -> Only need to refilter, if settings have changed.
-bool_refilter_data_for_limits = 0
-bool_refilter_1D_binned_for_time_interv = 0
-bool_refilter_2D_binned_for_time_interv = 0
+bool_refilter_data_for_limits = 1
+bool_refilter_1D_binned_for_time_interv = 1
+bool_refilter_2D_binned_for_time_interv = 1
 
 # to divide standard deviation by sqrt(N), where N is the number of datapoints in each bin
 bool_use_std_of_mean = 1
 
+# INFO: CHOOSE WHETHER TO PLOT
 # --- plotting
 # save figs to hard drive
 bool_save_fig = 1
@@ -72,22 +75,22 @@ bool_plot_all = 0
 bool_plot_nothing = 0
 
 # select specific plots
-bool_plot_yaw_table = 0
+bool_plot_yaw_table = 1
 
-bool_plot_errorcode_counts = 0
+bool_plot_errorcode_counts = 1
 
 bool_count_intervals_1D_and_plot = 0
-bool_count_intervals_2D_and_plot = 0
+bool_count_intervals_2D_and_plot = 1
 
 # careful, when plotting full dataset with high time resolution (e.g. 1 second)
 # this can take long time or lead to memory error
 bool_plot_unfiltered_data_overview = 0
 
-bool_plot_limit_filtered_data_overview = 0
-bool_plot_limit_filtered_data_binned = 0
+bool_plot_limit_filtered_data_overview = 1
+bool_plot_limit_filtered_data_binned = 1
 
 bool_plot_1D_binned_time_int_filtered_data = 0
-bool_plot_2D_binned_time_int_filtered_data = 0
+bool_plot_2D_binned_time_int_filtered_data = 1
 
 bool_plot_1D_binned_valid_intervals = 0
 bool_plot_2D_binned_valid_intervals = 0
@@ -143,15 +146,17 @@ if not bool_use_2D_binned_filtering:
 
 ## SETTINGS
 
+# INFO: CHANGE PATHS TO FOLDERS ACCORDINGLY
 # --- paths
-path2dir_code = '/home/jj/Projects/YawDyn/Code/YawDyn_py'
-path2dir_data_base = '/home/jj/Projects/YawDyn/Data'
-path2dir_fig_base = '/home/jj/Projects/YawDyn/figs'
+path2dir_code = 'Code'
+path2dir_data_base = 'Data'
+path2dir_fig_base = 'Figures'
 path2dir_in_base = path2dir_data_base + os.sep + 'processed'
 
 path2dir_yaw_table = path2dir_code
 fname_yaw_table = 'lookup_table.csv'
 
+# INFO: CHANGE DATE RANGE
 # --- dates to include
 # incl. end_date, must be time ordered
 start_date_list = ['2023-06-01', '2023-09-01']
@@ -163,6 +168,7 @@ end_date_list = ['2023-07-31', '2024-01-31']
 
 date_range_total_str = start_date_list[0] + '_' + end_date_list[-1]
 
+# INFO: CHANGE THE RESAMPLING INTERVAL
 # --- resample interval of processed data to be loaded
 resample_interval_s = 10
 # resample_interval_s = 60
@@ -190,6 +196,7 @@ idx_downstream = 0
 turb_keys_up = [tk[idx_upstream] for tk in turb_keys_split_by_pair]
 turb_keys_down = [tk[idx_downstream] for tk in turb_keys_split_by_pair]
 
+# INFO: Change the vars
 var_keys_to_process = [
     'Power',
     'WSpeed',
@@ -252,6 +259,7 @@ if filt_id == 1:
     pitch_min = -0.3
     pitch_max = 2.2
 
+    #INFO: BIN WINDSPEED SETTINGS TO TWEAK
     # bin settings
     wspd_bin_min = 4.5
     wspd_bin_max = 12.5
@@ -277,7 +285,7 @@ if filt_id == 1:
 
 else:
 
-    wdir_min_per_pair = [285, 287]
+    wdir_min_per_pair = [285, 287] # INFO: Interval filterning
     wdir_max_per_pair = [342, 342]
     wspd_min = 5.0
     wspd_max = 12.0
@@ -309,7 +317,7 @@ else:
 
     # uninterrupted interval settings
     min_interval_duration_s = 8 * 60
-    discard_time_at_beginning_s = 3 * 60
+    discard_time_at_beginning_s = 3 * 60 # INFO: remove start of the yawing procedure
     # max gap between filtered valid time steps to be counted as the same interval
     max_gap_duration_s = 30
 
@@ -332,6 +340,7 @@ wspd_bins_per_pair = [
     wspd_bins
 ]
 
+#INFO: BIN WINDDIRECTION SETTINGS
 wdir_bins_per_pair = [
     wdir_bins_pair_1,
     wdir_bins_pair_2
@@ -1064,6 +1073,7 @@ if bool_plot_1D_binned_time_int_filtered_data:
             bool_use_std_of_mean
         )
 
+    # INFO: MAIN PLOTTING FUNCTIONS (2D)
     # per turb
     plo.plot_binned_2D_per_turb(
         df_binned_2D_mean_dict,
@@ -1386,8 +1396,36 @@ if bool_plot_errorcode_counts:
         date_range_total_str,
         color_dict_by_turb
     )
+    
+############################################################
+# INFO>>>
+plo.plot_norm_power_diff_T3_T5(
+    df_filt_ctrl_turb_dict,
+    turb_keys_split_by_pair,
+    idx_upstream,
+    idx_downstream,
+    resample_str,
+    path2dir_fig,
+)
+############################################################
+# INFO: PLOT YAW MISALIGNMENT VS WINDSPEED
+# Plot wind speed vs yaw misalignment for error code 6
+errorcode_val = 6
+plo.plot_wspd_vs_yawmis(
+    df_dict,
+    turb_keys_to_process,
+    turb_keys_split_by_pair,
+    idx_upstream,
+    idx_downstream,
+    errorcode_val,
+    bool_save_fig,
+    path2dir_fig,
+    figsize=(12, 8),
+    marker_size=3,
+    alpha=0.7,
+)
+############################################################
 
 ##
 plt.close('all')
-
 print('--- script finished:', os.path.basename(__file__), '---')

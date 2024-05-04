@@ -3,6 +3,7 @@
 import os
 
 import matplotlib as mpl
+# INFO: CHOOSE BACKEND (TkAgg is for Windows)
 MPL_BACKEND = 'TkAgg'
 # MPL_BACKEND = 'QtAgg'
 mpl.use(MPL_BACKEND)
@@ -27,6 +28,157 @@ mpl.rcParams.update(mpl.rcParamsDefault) # reset to default settings
 mpl.rcParams.update(rc_params_dict) # set to custom settings
 
 ## FUNCTIONS
+#########################################################
+# INFO:
+def plot_norm_power_diff_T3_T5(
+    df_filt_ctrl_turb_dict,
+    turb_keys_split_by_pair,
+    idx_upstream,
+    idx_downstream,
+    resample_str,
+    path2dir_fig,
+    bool_save_fig=True,
+    figsize=(16, 8),
+):
+    """
+    Plots the percentage difference in normalized power between turbines T3 and T5.
+    Highlights the regions when the control is turned on or off.
+
+    Args:
+        df_filt_ctrl_turb_dict (dict): Dictionary containing filtered DataFrames for each turbine and control mode.
+        turb_keys_split_by_pair (list): List of turbine key pairs.
+        idx_upstream (int): Index of the upstream turbine in each pair.
+        idx_downstream (int): Index of the downstream turbine in each pair.
+        resample_str (str): Resampling interval string.
+        path2dir_fig (str): Path to the directory where the figure will be saved.
+        bool_save_fig (bool, optional): Whether to save the figure or not. Default is True.
+        figsize (tuple, optional): Figure size (width, height) in inches. Default is (16, 8).
+    """
+    # Find the pairs containing T3 and T5
+    pair_idx_T3 = None
+    pair_idx_T5 = None
+    for i, pair in enumerate(turb_keys_split_by_pair):
+        if 'T3' in pair:
+            pair_idx_T3 = i
+        if 'T5' in pair:
+            pair_idx_T5 = i
+
+    if pair_idx_T3 is None or pair_idx_T5 is None:
+        print("Turbines T3 and T5 not found in the data.")
+        return
+
+    turb_key_T3 = turb_keys_split_by_pair[pair_idx_T3][idx_downstream]
+    turb_key_T5 = turb_keys_split_by_pair[pair_idx_T5][idx_downstream]
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for ctrl_key in ['on', 'off']:
+        df_T3 = df_filt_ctrl_turb_dict[ctrl_key][turb_key_T3]
+        df_T5 = df_filt_ctrl_turb_dict[ctrl_key][turb_key_T5]
+
+        # Align the time indices of T3 and T5 DataFrames
+        common_index = df_T3.index.union(df_T5.index)
+        df_T3 = df_T3.reindex(common_index)
+        df_T5 = df_T5.reindex(common_index)
+
+        norm_power_T3 = df_T3['NormPower']
+        norm_power_T5 = df_T5['NormPower']
+
+        power_diff_pct = 100 * (norm_power_T3 - norm_power_T5) / norm_power_T5
+
+        ax.plot(
+            df_T3.index,
+            power_diff_pct,
+            label=f"Control {ctrl_key}",
+            alpha=0.7,
+        )
+
+    ax.axhline(0, color='k', linestyle='--', label='No difference')
+    ax.set_xlabel('Time')
+    ax.set_ylabel('% Difference in Normalized Power (T3 - T5)')
+    ax.set_title(f'Normalized Power Difference between T3 and T5 (Sampling: {resample_str})')
+    ax.legend()
+    ax.grid()
+
+    if bool_save_fig:
+        figname = f'norm_power_diff_T3_T5_{resample_str}.png'
+        fig.savefig(os.path.join(path2dir_fig, figname), bbox_inches='tight')
+        plt.close(fig)
+##########################################################
+def plot_wspd_vs_yawmis(
+        df_dict,
+        turb_keys_to_process,
+        turb_keys_split_by_pair,
+        idx_upstream,
+        idx_downstream,
+        errorcode_val,
+        bool_save_fig,
+        path2dir_fig,
+        figsize=(8, 6),
+        marker_size=2,
+        alpha=0.5,
+):
+    """
+    Plots wind speed vs yaw misalignment for a given error code value.
+
+    Args:
+        df_dict (dict): Dictionary containing pandas DataFrames for each turbine.
+        turb_keys_to_process (list): List of turbine keys to process.
+        turb_keys_split_by_pair (list): List of turbine key pairs.
+        idx_upstream (int): Index of the upstream turbine in each pair.
+        idx_downstream (int): Index of the downstream turbine in each pair.
+        errorcode_val (float): Error code value to filter the data.
+        bool_save_fig (bool): Whether to save the figure or not.
+        path2dir_fig (str): Path to the directory where the figure will be saved.
+        figsize (tuple, optional): Figure size (width, height) in inches. Default is (8, 6).
+        marker_size (int, optional): Marker size for the scatter plot. Default is 4.
+        alpha (float, optional): Alpha value for the scatter plot. Default is 0.5.
+    """
+    n_turb_pairs = len(turb_keys_split_by_pair)
+
+    fig, axes = plt.subplots(nrows=1, ncols=n_turb_pairs, figsize=figsize, sharey=True)
+
+    for pair_n in range(n_turb_pairs):
+        ax = axes[pair_n]
+
+        turb_key_up = turb_keys_split_by_pair[pair_n][idx_upstream]
+        turb_key_down = turb_keys_split_by_pair[pair_n][idx_downstream]
+
+        df_up = df_dict[turb_key_up]
+        df_down = df_dict[turb_key_down]
+
+        mask_errorcode = (df_up['Errorcode'] == errorcode_val) & (df_down['Errorcode'] == errorcode_val)
+
+        ax.scatter(
+            df_up['WSpeed'][mask_errorcode],
+            df_up['Yaw'][mask_errorcode] - df_up['WDir'][mask_errorcode],
+            s=marker_size,
+            alpha=alpha,
+            label=turb_key_up
+        )
+
+        ax.scatter(
+            df_down['WSpeed'][mask_errorcode],
+            df_down['Yaw'][mask_errorcode] - df_down['WDir'][mask_errorcode],
+            s=marker_size,
+            alpha=alpha,
+            label=turb_key_down
+        )
+
+        ax.set_xlabel('Wind Speed [m/s]')
+        ax.set_ylabel('Yaw Misalignment [deg]')
+        ax.legend()
+        ax.grid()
+        ax.set_title(f'Pair {pair_n + 1}')
+
+    fig.suptitle(f'Error Code: {errorcode_val}')
+    fig.tight_layout()
+
+    if bool_save_fig:
+        figname = f'wspd_vs_yawmis_errorcode_{errorcode_val:.0f}.png'
+        fig.savefig(os.path.join(path2dir_fig, figname), bbox_inches='tight')
+        plt.close(fig)
+#################################################
 
 
 def plot_df_turb_dict_overview(
