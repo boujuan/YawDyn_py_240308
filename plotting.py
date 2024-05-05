@@ -30,80 +30,61 @@ mpl.rcParams.update(rc_params_dict) # set to custom settings
 ## FUNCTIONS
 #########################################################
 # INFO:
-def plot_norm_power_diff_T3_T5(
-    df_filt_ctrl_turb_dict,
-    turb_keys_split_by_pair,
-    idx_upstream,
-    idx_downstream,
-    resample_str,
-    path2dir_fig,
-    bool_save_fig=True,
-    figsize=(16, 8),
+def plot_power_diff_vs_abs_yaw_mis(
+        df_dict, 
+        turb_keys_split_by_pair,
+        idx_upstream, 
+        idx_downstream,
+        bin_width=1.0,
+        figsize=(8, 6), 
+        bool_save_fig=False,
+        path2dir_fig=None
 ):
-    """
-    Plots the percentage difference in normalized power between turbines T3 and T5.
-    Highlights the regions when the control is turned on or off.
-
-    Args:
-        df_filt_ctrl_turb_dict (dict): Dictionary containing filtered DataFrames for each turbine and control mode.
-        turb_keys_split_by_pair (list): List of turbine key pairs.
-        idx_upstream (int): Index of the upstream turbine in each pair.
-        idx_downstream (int): Index of the downstream turbine in each pair.
-        resample_str (str): Resampling interval string.
-        path2dir_fig (str): Path to the directory where the figure will be saved.
-        bool_save_fig (bool, optional): Whether to save the figure or not. Default is True.
-        figsize (tuple, optional): Figure size (width, height) in inches. Default is (16, 8).
-    """
-    # Find the pairs containing T3 and T5
-    pair_idx_T3 = None
-    pair_idx_T5 = None
-    for i, pair in enumerate(turb_keys_split_by_pair):
-        if 'T3' in pair:
-            pair_idx_T3 = i
-        if 'T5' in pair:
-            pair_idx_T5 = i
-
-    if pair_idx_T3 is None or pair_idx_T5 is None:
-        print("Turbines T3 and T5 not found in the data.")
-        return
-
-    turb_key_T3 = turb_keys_split_by_pair[pair_idx_T3][idx_downstream]
-    turb_key_T5 = turb_keys_split_by_pair[pair_idx_T5][idx_downstream]
-
-    fig, ax = plt.subplots(figsize=figsize)
-
-    for ctrl_key in ['on', 'off']:
-        df_T3 = df_filt_ctrl_turb_dict[ctrl_key][turb_key_T3]
-        df_T5 = df_filt_ctrl_turb_dict[ctrl_key][turb_key_T5]
-
-        # Align the time indices of T3 and T5 DataFrames
-        common_index = df_T3.index.union(df_T5.index)
-        df_T3 = df_T3.reindex(common_index)
-        df_T5 = df_T5.reindex(common_index)
-
-        norm_power_T3 = df_T3['NormPower']
-        norm_power_T5 = df_T5['NormPower']
-
-        power_diff_pct = 100 * (norm_power_T3 - norm_power_T5) / norm_power_T5
-
-        ax.plot(
-            df_T3.index,
-            power_diff_pct,
-            label=f"Control {ctrl_key}",
-            alpha=0.7,
-        )
-
-    ax.axhline(0, color='k', linestyle='--', label='No difference')
-    ax.set_xlabel('Time')
-    ax.set_ylabel('% Difference in Normalized Power (T3 - T5)')
-    ax.set_title(f'Normalized Power Difference between T3 and T5 (Sampling: {resample_str})')
-    ax.legend()
-    ax.grid()
-
+    fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
+    
+    for pair_n, (ax, turb_pair) in enumerate(zip(axes, turb_keys_split_by_pair)):
+        turb_up = turb_pair[idx_upstream]
+        turb_down = turb_pair[idx_downstream]
+        
+        df_up = df_dict[turb_up]
+        df_down = df_dict[turb_down]
+        
+        # Calculate yaw misalignment and normalize to [-180, 180] degrees
+        yaw_mis_up = (df_up['Yaw'] - df_up['WDir'] + 180) % 360 - 180
+        
+        bins = np.arange(0, 180+bin_width, bin_width)
+        
+        if pair_n == 0:
+            power_diff_pct = (df_dict['T3']['Power']/df_dict['T3']['Power'].mean() - 
+                              df_dict['T5']['Power']/df_dict['T5']['Power'].mean()) * 100
+        else:
+            power_diff_pct = (df_dict['T5']['Power']/df_dict['T5']['Power'].mean() - 
+                              df_dict['T3']['Power']/df_dict['T3']['Power'].mean()) * 100
+        
+        df_binned = pd.DataFrame({
+            'yaw_mis_up': pd.cut(yaw_mis_up.abs(), bins),
+            'power_diff_pct': power_diff_pct
+        })
+        
+        power_diff_binned = df_binned.groupby('yaw_mis_up').mean()
+        
+        ax.bar(power_diff_binned.index.astype(str), power_diff_binned['power_diff_pct'], 
+               width=0.8, align='center', alpha=0.7)
+        
+        if pair_n == 0:
+            ax.set_ylabel(f'Power Diff T3 vs T5 [%]')
+        else:
+            ax.set_ylabel(f'Power Diff T5 vs T3 [%]')
+        ax.grid()
+        ax.tick_params(axis='x', labelsize=5)
+        ax.xaxis.set_major_locator(plt.MaxNLocator(15))
+        
+    axes[1].set_xlabel('Abs Yaw Misalignment Upstream [deg]')
+    
+    fig.tight_layout()
+    
     if bool_save_fig:
-        figname = f'norm_power_diff_T3_T5_{resample_str}.png'
-        fig.savefig(os.path.join(path2dir_fig, figname), bbox_inches='tight')
-        plt.close(fig)
+        fig.savefig(path2dir_fig + 'power_diff_vs_abs_yaw_mis.png')
 ##########################################################
 def plot_wspd_vs_yawmis(
         df_dict,

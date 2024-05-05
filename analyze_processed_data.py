@@ -1399,13 +1399,15 @@ if bool_plot_errorcode_counts:
     
 ############################################################
 # INFO>>>
-plo.plot_norm_power_diff_T3_T5(
-    df_filt_ctrl_turb_dict,
+plo.plot_power_diff_vs_abs_yaw_mis(
+    df_dict,
     turb_keys_split_by_pair,
     idx_upstream,
-    idx_downstream,
-    resample_str,
-    path2dir_fig,
+    idx_downstream, 
+    bin_width=5.0,
+    figsize=(8,6),
+    bool_save_fig=bool_save_fig,
+    path2dir_fig=path2dir_fig
 )
 ############################################################
 # INFO: PLOT YAW MISALIGNMENT VS WINDSPEED
