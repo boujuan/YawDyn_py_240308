@@ -27,19 +27,147 @@ from my_rc_params import rc_params_dict
 mpl.rcParams.update(mpl.rcParamsDefault) # reset to default settings
 mpl.rcParams.update(rc_params_dict) # set to custom settings
 
+from scipy.stats import weibull_min # For fitting weibull distribution
+import scipy.interpolate as interp
+from scipy.optimize import curve_fit
+
+
 ## FUNCTIONS
 #########################################################
 # INFO:
+# TASK 1: Find positioning of wind turines vs wind vane measurements
+
+def plot_norm_power_ratio_vs_wdir(
+        df_binned_1D_mean_dict,
+        df_binned_1D_std_dict,
+        wdir_bins_per_pair,
+        turb_keys_split_by_pair,
+        idx_upstream, idx_downstream,
+        bool_save_fig,
+        figsize,
+        path2dir_fig,
+):
+    n_turb_pairs = len(turb_keys_split_by_pair)
+
+    fig, axes = plt.subplots(nrows=1, ncols=n_turb_pairs, figsize=figsize, sharey=True)
+
+    for pair_n, (ax, turb_pair) in enumerate(zip(axes, turb_keys_split_by_pair)):
+        turb_up = turb_pair[idx_upstream]
+        turb_down = turb_pair[idx_downstream]
+
+        wdir_bins = wdir_bins_per_pair[pair_n]
+        wdir_bin_centers = 0.5 * (wdir_bins[:-1] + wdir_bins[1:])
+
+        norm_power_ratio_mean = df_binned_1D_mean_dict['off'][turb_down]['NormPower'] / df_binned_1D_mean_dict['off'][turb_up]['NormPower']
+        norm_power_ratio_std = np.sqrt(
+            (df_binned_1D_std_dict['off'][turb_down]['NormPower'] / df_binned_1D_mean_dict['off'][turb_up]['NormPower'])**2
+            + (df_binned_1D_std_dict['off'][turb_up]['NormPower'] * df_binned_1D_mean_dict['off'][turb_down]['NormPower'] / df_binned_1D_mean_dict['off'][turb_up]['NormPower']**2)**2
+        )
+
+        ax.plot(wdir_bin_centers, norm_power_ratio_mean, marker='o', label=f'Pair {pair_n + 1}')
+        ax.fill_between(wdir_bin_centers, norm_power_ratio_mean - norm_power_ratio_std, norm_power_ratio_mean + norm_power_ratio_std, alpha=0.2)
+
+        # Fit a polynomial function to the data
+        poly_degree = 20  # Adjust the degree as needed
+        poly_coeffs = np.polyfit(wdir_bin_centers, norm_power_ratio_mean, poly_degree)
+        poly_func = np.poly1d(poly_coeffs)
+
+        # Generate points for the fitted polynomial curve
+        wdir_fit = np.linspace(wdir_bin_centers.min(), wdir_bin_centers.max(), 100)
+        norm_power_ratio_fit = poly_func(wdir_fit)
+
+        # Find the minimum point of the fitted polynomial curve
+        min_idx = np.argmin(norm_power_ratio_fit)
+        min_wdir = wdir_fit[min_idx]
+        min_norm_power_ratio = norm_power_ratio_fit[min_idx]
+
+        # Plot the fitted polynomial curve and minimum point
+        ax.plot(wdir_fit, norm_power_ratio_fit, 'r--', linewidth=0.8, label='Fitted Polynomial')
+        ax.plot(min_wdir, min_norm_power_ratio, 'ro', markersize=3, label=f'Minimum at {min_wdir:.1f}°')
+
+        ax.set_xlabel('Wind Direction [deg]', fontsize=3)
+        if pair_n == 0:
+            ax.set_ylabel('Norm. Power Ratio (Down/Up)', fontsize=3)
+        ax.legend(fontsize=5)
+        ax.grid()
+
+        # Increase the number of ticks on the x and y axes
+        ax.xaxis.set_major_locator(plt.MaxNLocator(20))
+        ax.yaxis.set_major_locator(plt.MaxNLocator(10))
+        ax.tick_params(axis='x', labelsize=5)  # Adjust fontsize for x-axis labels
+        ax.tick_params(axis='y', labelsize=5)  # Adjust fontsize for y-axis labels
+
+    fig.suptitle('Normalized Power Ratio (Down/Up) vs Wind Direction (Ctrl Off)', fontsize=7)
+    fig.tight_layout()
+
+    if bool_save_fig:
+        figname = 'norm_power_ratio_vs_wdir_ctrl_off.png'
+        fig.savefig(os.path.join(path2dir_fig, figname), bbox_inches='tight')
+        plt.close(fig)
+        
+# INFO: TASK 2
+def plot_wspd_dist_upstream_turbs(df_filt_ctrl_turb_dict, turb_keys_up, ctrl_keys, path2dir_fig, figsize=(8, 6)):
+    """
+    Plots the Weibull-like distribution curves of wind speed for the two upstream turbines (T4 and T6)
+    for each control mode.
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+
+    for ctrl_key in ctrl_keys:
+        for turb_key in turb_keys_up:
+            df = df_filt_ctrl_turb_dict[ctrl_key][turb_key]
+            wspd = df['WSpeed'].values
+            wspd = wspd[~np.isnan(wspd)]  # Remove NaN values
+            wspd_mean = wspd.mean()
+
+            # Fit Weibull distribution
+            shape, loc, scale = weibull_min.fit(wspd, floc=0)
+
+            # Calculate Weibull PDF
+            x = np.linspace(wspd.min(), wspd.max(), 1000)
+            pdf = weibull_min.pdf(x, shape, loc, scale)
+
+            label = f'{turb_key}, Ctrl {ctrl_key}'
+            line, = ax.plot(x, pdf, label=label)
+
+            # Add vertical bar for mean wind speed
+            ax.axvline(wspd_mean, color=line.get_color(), linestyle='--', label=f'Mean WSpeed ({turb_key})')
+
+            # Shade area under curve for "off" control mode
+            if ctrl_key == 'off':
+                ax.fill_between(x, pdf, alpha=0.2, color=line.get_color())
+
+    ax.set_xlabel('Wind Speed [m/s]')
+    ax.set_ylabel('Probability Density')
+    ax.legend()
+    ax.grid()
+    
+    title = 'Weibull distribution curves of wind speed for the two upstream turbines for each control mode'
+    fig.suptitle(title)
+    fig.tight_layout()
+
+    figname = 'wspd_dist_upstream_turbs.png'
+    fig.savefig(os.path.join(path2dir_fig, figname), bbox_inches='tight')
+    plt.close(fig)
+
+#######################################################
 def plot_power_diff_vs_abs_yaw_mis(
         df_dict, 
         turb_keys_split_by_pair,
         idx_upstream, 
         idx_downstream,
+        path2dir_yaw_table,
+        fname_yaw_table,
         bin_width=1.0,
-        figsize=(8, 6), 
+        figsize=(8, 6),
         bool_save_fig=False,
         path2dir_fig=None
 ):
+    calc_yaw_setpoint_per_pair = proc.gen_yaw_table_interp(
+            path2dir_yaw_table,
+            fname_yaw_table,
+    )
+    
     fig, axes = plt.subplots(2, 1, figsize=figsize, sharex=True)
     
     for pair_n, (ax, turb_pair) in enumerate(zip(axes, turb_keys_split_by_pair)):
@@ -49,10 +177,11 @@ def plot_power_diff_vs_abs_yaw_mis(
         df_up = df_dict[turb_up]
         df_down = df_dict[turb_down]
         
-        # Calculate yaw misalignment and normalize to [-180, 180] degrees
-        yaw_mis_up = (df_up['Yaw'] - df_up['WDir'] + 180) % 360 - 180
+        # Calculate yaw misalignment using the yaw table
+        calc_yaw_setpoint_x = calc_yaw_setpoint_per_pair[pair_n]
+        yaw_mis_up = df_up['Yaw'] - calc_yaw_setpoint_x(df_up['WDir'])
         
-        bins = np.arange(0, 180+bin_width, bin_width)
+        bins = np.arange(-10, 10+bin_width, bin_width)  # Adjust the bin range as needed
         
         if pair_n == 0:
             power_diff_pct = (df_dict['T3']['Power']/df_dict['T3']['Power'].mean() - 

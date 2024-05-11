@@ -230,7 +230,7 @@ rotor_area = np.pi * rotor_rad**2
 
 ## FILTER SETTINGS
 
-filt_id = 1
+filt_id = 2 # 1 is default filter, 2 is Juans custom filter
 
 # for below:
 # the control approach leads to changed yaw lookup table in this range:
@@ -282,6 +282,51 @@ if filt_id == 1:
     discard_time_at_beginning_s = 3 * 60
     # max gap between filtered valid time steps to be counted as the same interval
     max_gap_duration_s = 30
+    
+elif filt_id == 2:
+    
+    wdir_min_per_pair = [285, 287]
+    wdir_max_per_pair = [342, 342]
+    wspd_min = 4.5
+    wspd_max = 12.5
+    power_min = 200
+    power_max = 4999
+    powerref_min = 4999
+    powerref_max = 7000
+    errorcode_min = 5.5
+    errorcode_max = 6.5
+    pitch_min = -0.3
+    pitch_max = 2.2
+
+    #INFO: BIN WINDSPEED SETTINGS TO TWEAK
+    # bin settings
+    wspd_bin_min = 4.5
+    wspd_bin_max = 12.5
+    wspd_bin_width = 1.0
+    wdir_bin_width = 1.0 # NEW DEFINITION
+
+    # pair 1
+    # wdir_bin_min_1 = wdir_min_per_pair[0]
+    # wdir_bin_max_1 = wdir_max_per_pair[0]
+    # wdir_bins_pair_1 = np.array(
+    #     [wdir_bin_min_1 - 0.1, 295.7, 306, 316, 326.3, wdir_bin_max_1 + 0.1])
+
+    # pair 2
+    # wdir_bin_min_2 = wdir_min_per_pair[1]
+    # wdir_bin_max_2 = wdir_max_per_pair[1]
+    # wdir_bins_pair_2 = np.array(
+    #     [wdir_bin_min_2 - 0.1, 298, 308.2, 318.2, 327.3, wdir_bin_max_2 + 0.1])
+    
+    # INFO: NEW METHOD TO DEFINE BINS FOR WDIR. COMMENTED PREVIOUS METHOD
+    wdir_bins_per_pair = [np.arange(wdir_min_per_pair[0], wdir_max_per_pair[0] + wdir_bin_width, wdir_bin_width),
+                      np.arange(wdir_min_per_pair[1], wdir_max_per_pair[1] + wdir_bin_width, wdir_bin_width)]
+
+    # uninterrupted interval settings
+    min_interval_duration_s = 8 * 60
+    discard_time_at_beginning_s = 3 * 60
+    # max gap between filtered valid time steps to be counted as the same interval
+    max_gap_duration_s = 30
+    
 
 else:
 
@@ -340,11 +385,11 @@ wspd_bins_per_pair = [
     wspd_bins
 ]
 
-#INFO: BIN WINDDIRECTION SETTINGS
-wdir_bins_per_pair = [
-    wdir_bins_pair_1,
-    wdir_bins_pair_2
-]
+#INFO: BIN WINDDIRECTION SETTINGS .... THIS WAS DEFINED BEFORE NOW!! 
+# wdir_bins_per_pair = [
+#     wdir_bins_pair_1,
+#     wdir_bins_pair_2
+# ]
 
 wspd_bin_centers_per_pair = []
 wdir_bin_centers_per_pair = []
@@ -1403,8 +1448,10 @@ plo.plot_power_diff_vs_abs_yaw_mis(
     df_dict,
     turb_keys_split_by_pair,
     idx_upstream,
-    idx_downstream, 
-    bin_width=5.0,
+    idx_downstream,
+    path2dir_yaw_table,
+    fname_yaw_table,
+    bin_width=1.0,
     figsize=(8,6),
     bool_save_fig=bool_save_fig,
     path2dir_fig=path2dir_fig
@@ -1427,7 +1474,30 @@ plo.plot_wspd_vs_yawmis(
     alpha=0.7,
 )
 ############################################################
+# INFO: TASK 1: FIND POSITIONING OF WIND TURINES VS WIND VANE MEASUREMENTS
+# Bin the data in 1D using wind direction
 
-##
+# Plot the0 normalized power ratio vs wind direction
+figsize_norm_power_ratio = cm2inch(16, 6)
+plo.plot_norm_power_ratio_vs_wdir(
+    df_binned_1D_mean_dict,
+    df_binned_1D_std_dict,
+    wdir_bins_per_pair,
+    turb_keys_split_by_pair,
+    idx_upstream, idx_downstream,
+    bool_save_fig,
+    figsize_norm_power_ratio,
+    path2dir_fig_limit_filtered,
+)
+# INFO: TASK 2: PLOT WINDSPEED DISTRIBUTION FOR UPSTREAM TURBS
+bool_plot_wspd_dist_upstream_turbs = True
+if bool_plot_wspd_dist_upstream_turbs:
+    plo.plot_wspd_dist_upstream_turbs(
+        df_filt_ctrl_turb_dict, 
+        turb_keys_up,
+        ctrl_keys,
+        path2dir_fig
+    )
+############################################################
 plt.close('all')
 print('--- script finished:', os.path.basename(__file__), '---')
