@@ -68,7 +68,7 @@ def plot_norm_power_ratio_vs_wdir(
         ax.fill_between(wdir_bin_centers, norm_power_ratio_mean - norm_power_ratio_std, norm_power_ratio_mean + norm_power_ratio_std, alpha=0.2)
 
         # Fit a polynomial function to the data
-        poly_degree = 20  # Adjust the degree as needed
+        poly_degree = 8  # Adjust the degree as needed
         poly_coeffs = np.polyfit(wdir_bin_centers, norm_power_ratio_mean, poly_degree)
         poly_func = np.poly1d(poly_coeffs)
 
