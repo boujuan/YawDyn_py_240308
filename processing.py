@@ -9,6 +9,12 @@ from plot_tools import make_dir_if_not_exists
 
 ## GENERAL FUNCTIONS
 
+# INFO: Correct windspeed according to Vlaho's indications
+def correct_wspd(wspd, date):
+    if date < pd.Timestamp('2023-12-01'):
+        return wspd * ((0.8274/0.9006) + 0.5645)
+    else:
+        return wspd
 
 def gen_pandas_bin_keys_from_bins_1D(
     bins
@@ -202,6 +208,10 @@ def load_processed_data(
             for date_n, date_str in enumerate(date_list_str):
                 fname = date_str + '_' + resample_str_to_load + '_' + turb_key
                 df_ = pd.read_hdf(path2dir_in + os.sep + fname + '.h5')
+                
+                # INFO: Apply correction to 'WSpeed' column
+                df_['WSpeed'] = df_.apply(lambda row: correct_wspd(row['WSpeed'], row.name), axis=1)
+                
                 df_list.append(df_)
                 print('loaded', date_str)
 

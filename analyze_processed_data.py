@@ -17,7 +17,6 @@ wdir_index = df_binned_2D_std_dict['on']['T3'].index.get_level_values(level='WDi
 ## IMPORTS
 
 import os
-
 import matplotlib as mpl
 MPL_BACKEND = 'TkAgg'
 # MPL_BACKEND = 'QtAgg'
@@ -25,9 +24,7 @@ mpl.use(MPL_BACKEND)
 import ipython_tools
 ipython_tools.set_mpl_magic(MPL_BACKEND)
 import matplotlib.pyplot as plt
-
 import numpy as np
-
 import warnings
 # careful with removing warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -42,6 +39,9 @@ import plotting as plo
 from plot_tools import cm2inch, move_figure_window, make_dir_if_not_exists, marker_list, \
     delete_all_files_from_dir
 from my_rc_params import rc_params_dict
+import _stepresponse_analysis as sra
+
+
 mpl.rcParams.update(mpl.rcParamsDefault) # reset to default settings
 mpl.rcParams.update(rc_params_dict) # set to custom settings
 
@@ -1498,6 +1498,35 @@ if bool_plot_wspd_dist_upstream_turbs:
         ctrl_keys,
         path2dir_fig
     )
+    
+# # INFO: TASK 3: WIND SPEED CORRECTION UNDER YAW MISALIGNMENT
+## PLOT IDENTIFIED YAW MANEUVERS
+
+print(df_filt_ctrl_turb_dict.keys())
+bool_plot_identified_yaw_maneuvers = True
+
+if bool_plot_identified_yaw_maneuvers:
+    # Create a dictionary of filtered yaw data for each turbine and control key
+    df_filt_yaw_dict = {}
+    for ctrl_key in df_filt_ctrl_turb_dict.keys():
+        df_filt_yaw_dict[ctrl_key] = {}
+        for turb_key in turb_keys_to_process:
+            if turb_key in df_filt_ctrl_turb_dict[ctrl_key]:
+                print("turb_key:", turb_key)
+                print()
+                df_filt_yaw_dict[ctrl_key][turb_key] = df_filt_ctrl_turb_dict[ctrl_key][turb_key]['Yaw']
+                print("---------------------------------------------")
+            else:
+                print(f"Error")
+    
+    sra.plot_identified_yaw_maneuvers(
+        df_filt_yaw_dict,
+        turb_keys_to_process,
+        path2dir_fig_base,
+        date_range_total_str,
+        resample_str
+    )
+
 ############################################################
 plt.close('all')
 print('--- script finished:', os.path.basename(__file__), '---')

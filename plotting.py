@@ -1,7 +1,6 @@
 ## IMPORTS
 
 import os
-
 import matplotlib as mpl
 # INFO: CHOOSE BACKEND (TkAgg is for Windows)
 MPL_BACKEND = 'TkAgg'
@@ -49,11 +48,11 @@ def plot_norm_power_ratio_vs_wdir(
 ):
     n_turb_pairs = len(turb_keys_split_by_pair)
 
-    fig, axes = plt.subplots(nrows=1, ncols=n_turb_pairs, figsize=figsize, sharey=True)
+    fig, axes = plt.subplots(nrows=2, ncols=n_turb_pairs, figsize=figsize, sharex=True)
 
-    for pair_n, (ax, turb_pair) in enumerate(zip(axes, turb_keys_split_by_pair)):
-        turb_up = turb_pair[idx_upstream]
-        turb_down = turb_pair[idx_downstream]
+    for pair_n, (ax_ratio, ax_yaw) in enumerate(zip(axes[0], axes[1])):
+        turb_up = turb_keys_split_by_pair[pair_n][idx_upstream]
+        turb_down = turb_keys_split_by_pair[pair_n][idx_downstream]
 
         wdir_bins = wdir_bins_per_pair[pair_n]
         wdir_bin_centers = 0.5 * (wdir_bins[:-1] + wdir_bins[1:])
@@ -64,8 +63,9 @@ def plot_norm_power_ratio_vs_wdir(
             + (df_binned_1D_std_dict['off'][turb_up]['NormPower'] * df_binned_1D_mean_dict['off'][turb_down]['NormPower'] / df_binned_1D_mean_dict['off'][turb_up]['NormPower']**2)**2
         )
 
-        ax.plot(wdir_bin_centers, norm_power_ratio_mean, marker='o', label=f'Pair {pair_n + 1}')
-        ax.fill_between(wdir_bin_centers, norm_power_ratio_mean - norm_power_ratio_std, norm_power_ratio_mean + norm_power_ratio_std, alpha=0.2)
+        # Plot normalized power ratio
+        ax_ratio.plot(wdir_bin_centers, norm_power_ratio_mean, marker='o', label=f'Pair {pair_n + 1}', markersize=1.5)
+        ax_ratio.fill_between(wdir_bin_centers, norm_power_ratio_mean - norm_power_ratio_std, norm_power_ratio_mean + norm_power_ratio_std, alpha=0.5)
 
         # Fit a polynomial function to the data
         poly_degree = 8  # Adjust the degree as needed
@@ -80,24 +80,62 @@ def plot_norm_power_ratio_vs_wdir(
         min_idx = np.argmin(norm_power_ratio_fit)
         min_wdir = wdir_fit[min_idx]
         min_norm_power_ratio = norm_power_ratio_fit[min_idx]
+        
+        # Extract the yaw angles at the minimum power point wind direction
+        closest_bin_idx = np.argmin(np.abs(wdir_bin_centers - min_wdir))
+        closest_wdir = wdir_bin_centers[closest_bin_idx]
+        print("Debug: Closest WDir:", closest_wdir)  # Debug output
+         
+        yaw_up_at_min_series = df_binned_1D_mean_dict['off'][turb_up]['Yaw'].loc[df_binned_1D_mean_dict['off'][turb_up]['Yaw'].index == closest_wdir]
+        yaw_down_at_min_series = df_binned_1D_mean_dict['off'][turb_down]['Yaw'].loc[df_binned_1D_mean_dict['off'][turb_down]['Yaw'].index == closest_wdir]
+         
+        print("Debug: Yaw Up Series:", yaw_up_at_min_series)  # Debug output
+        print("Debug: Yaw Down Series:", yaw_down_at_min_series)  # Debug output
+         
+        yaw_up_at_min = yaw_up_at_min_series.iloc[0] if not yaw_up_at_min_series.empty else np.nan
+        yaw_down_at_min = yaw_down_at_min_series.iloc[0] if not yaw_down_at_min_series.empty else np.nan
+        
+        # Compare the yaw angles with the minimum power point wind direction
+        print(f"Pair {pair_n + 1}:")
+        print(f"Minimum power point wind direction: {min_wdir:.1f} degrees")
+        print(f"{turb_up} yaw angle: {yaw_up_at_min:.1f} degrees")
+        print(f"{turb_down} yaw angle: {yaw_down_at_min:.1f} degrees")
+        print()
 
         # Plot the fitted polynomial curve and minimum point
-        ax.plot(wdir_fit, norm_power_ratio_fit, 'r--', linewidth=0.8, label='Fitted Polynomial')
-        ax.plot(min_wdir, min_norm_power_ratio, 'ro', markersize=3, label=f'Minimum at {min_wdir:.1f}°')
+        ax_ratio.plot(wdir_fit, norm_power_ratio_fit, 'r--', linewidth=0.8, label='Fitted Polynomial')
+        ax_ratio.plot(min_wdir, min_norm_power_ratio, 'ro', markersize=2, label=f'Minimum at {min_wdir:.1f}°')
 
-        ax.set_xlabel('Wind Direction [deg]', fontsize=3)
+        ax_ratio.set_xlabel('Wind Direction [deg]', fontsize=5)
         if pair_n == 0:
-            ax.set_ylabel('Norm. Power Ratio (Down/Up)', fontsize=3)
-        ax.legend(fontsize=5)
-        ax.grid()
+            ax_ratio.set_ylabel('Norm. Power Ratio (Down/Up)', fontsize=5)
+        ax_ratio.legend(fontsize=5)
+        ax_ratio.grid()
 
         # Increase the number of ticks on the x and y axes
-        ax.xaxis.set_major_locator(plt.MaxNLocator(20))
-        ax.yaxis.set_major_locator(plt.MaxNLocator(10))
-        ax.tick_params(axis='x', labelsize=5)  # Adjust fontsize for x-axis labels
-        ax.tick_params(axis='y', labelsize=5)  # Adjust fontsize for y-axis labels
+        ax_ratio.xaxis.set_major_locator(plt.MaxNLocator(20))
+        ax_ratio.yaxis.set_major_locator(plt.MaxNLocator(10))
+        ax_ratio.tick_params(axis='x', labelsize=5)  # Adjust fontsize for x-axis labels
+        ax_ratio.tick_params(axis='y', labelsize=5)  # Adjust fontsize for y-axis labels
 
-    fig.suptitle('Normalized Power Ratio (Down/Up) vs Wind Direction (Ctrl Off)', fontsize=7)
+        # Plot yaw angles
+        ax_yaw.plot(wdir_bin_centers, df_binned_1D_mean_dict['off'][turb_up]['Yaw'], marker='o', label=f'{turb_up} Yaw')
+        ax_yaw.plot(wdir_bin_centers, df_binned_1D_mean_dict['off'][turb_down]['Yaw'], marker='o', label=f'{turb_down} Yaw')
+        ax_yaw.plot(wdir_bin_centers, wdir_bin_centers, '--', color='red', label='Ideal Yaw')
+
+        ax_yaw.set_xlabel('Wind Direction [deg]', fontsize=5)
+        if pair_n == 0:
+            ax_yaw.set_ylabel('Yaw Angle [deg]', fontsize=5)
+        ax_yaw.legend(fontsize=5)
+        ax_yaw.grid()
+
+        # Increase the number of ticks on the x and y axes
+        ax_yaw.xaxis.set_major_locator(plt.MaxNLocator(20))
+        ax_yaw.yaxis.set_major_locator(plt.MaxNLocator(10))
+        ax_yaw.tick_params(axis='x', labelsize=5)  # Adjust fontsize for x-axis labels
+        ax_yaw.tick_params(axis='y', labelsize=5)  # Adjust fontsize for y-axis labels
+
+    fig.suptitle('Normalized Power Ratio (Down/Up) vs Wind Direction (Ctrl Off)', fontsize=6)
     fig.tight_layout()
 
     if bool_save_fig:
@@ -106,7 +144,13 @@ def plot_norm_power_ratio_vs_wdir(
         plt.close(fig)
         
 # INFO: TASK 2
-def plot_wspd_dist_upstream_turbs(df_filt_ctrl_turb_dict, turb_keys_up, ctrl_keys, path2dir_fig, figsize=(8, 6)):
+def plot_wspd_dist_upstream_turbs(
+        df_filt_ctrl_turb_dict,
+        turb_keys_up,
+        ctrl_keys,
+        path2dir_fig,
+        figsize=(8, 6)
+):
     """
     Plots the Weibull-like distribution curves of wind speed for the two upstream turbines (T4 and T6)
     for each control mode.
