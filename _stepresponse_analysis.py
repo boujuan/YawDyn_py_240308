@@ -11,25 +11,28 @@ from plotly.subplots import make_subplots
 
 # INFO: TASK 3:
 
-def plot_identified_yaw_maneuvers(yaw_data, path2dir_fig_base, date_range_total_str, resample_str):
+def plot_identified_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, date_range_total_str, resample_str):
     path2dir_yaw_maneuvers = f"{path2dir_fig_base}/identified_yaw_maneuvers/{date_range_total_str}_{resample_str}"
     make_dir_if_not_exists(path2dir_yaw_maneuvers)
 
     for turb_key in yaw_data.columns:
+        print(turb_key)
         yaw_filt = yaw_data[turb_key]
+        wind_speed_filt = wind_speed_data[f'N3_{turb_key.split("_")[-1]}']
         yaw_man, yaw_length, yaw_duration = find_yaw_maneuver(yaw_filt)
 
-        fig = make_subplots(rows=1, cols=1)
-        fig.add_trace(go.Scatter(x=yaw_filt.index, y=yaw_filt, mode='lines', name='Yaw Angle'))
+        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
+        fig.add_trace(go.Scatter(x=yaw_filt.index, y=yaw_filt, mode='lines', name='Yaw Angle'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=wind_speed_filt.index, y=wind_speed_filt, mode='lines', name='Wind Speed'), row=2, col=1)
 
         # Add markers for the start and stop of each maneuver
         starts = yaw_man[yaw_man == 'cw_start'].index.union(yaw_man[yaw_man == 'ccw_start'].index)
         stops = yaw_man[yaw_man == 'cw_stop'].index.union(yaw_man[yaw_man == 'ccw_stop'].index)
 
-        fig.add_trace(go.Scatter(x=starts, y=yaw_filt.loc[starts], mode='markers', marker=dict(color='green', size=10), name='Start'))
-        fig.add_trace(go.Scatter(x=stops, y=yaw_filt.loc[stops], mode='markers', marker=dict(color='red', size=10), name='Stop'))
+        fig.add_trace(go.Scatter(x=starts, y=yaw_filt.loc[starts], mode='markers', marker=dict(color='green', size=10), name='Start'), row=1, col=1)
+        fig.add_trace(go.Scatter(x=stops, y=yaw_filt.loc[stops], mode='markers', marker=dict(color='red', size=10), name='Stop'), row=1, col=1)
 
-        fig.update_layout(title=f"Yaw Maneuvers for Turbine {turb_key}", xaxis_title='Time', yaxis_title='Yaw Angle (degrees)')
+        fig.update_layout(title=f"Yaw Maneuvers and Wind Speed for Turbine {turb_key}", xaxis_title='Time', yaxis1_title='Yaw Angle (degrees)', yaxis2_title='Wind Speed (m/s)')
         fig.write_html(f"{path2dir_yaw_maneuvers}/{turb_key}_yaw_maneuvers_interactive.html")
 
 # INFO: Algorithm from Andreas
