@@ -12,12 +12,12 @@ def import_data_from_asc(file_path, sensor_name):
     data.set_index(pd.to_datetime(data['time'], format='%d.%m.%y %H:%M:%S'), inplace=True)
     data.drop(columns=['time'], inplace=True)
     data[sensor_name] = data[sensor_name].str.strip().astype('float')
-    data_resampled = data.resample('1s').mean()
+    data_resampled = data.resample('1s').ffill()
     print(f"Data for {sensor_name} loaded and resampled. Shape: {data_resampled.shape}")
     return data_resampled
 
 def filter_and_fill_data(df, power_range=(500, 4900), pitch_range=(0, 2), operation_state_value=6, controller_state_value=1,
-                         apply_power_filter=1, apply_pitch_filter=1, apply_operation_state_filter=1, apply_controller_state_filter=1):
+                         apply_power_filter=0, apply_pitch_filter=1, apply_operation_state_filter=1, apply_controller_state_filter=1):
     # Initialize the filter with all True values (no filtering)
     filter_mask = pd.Series(True, index=df.index)
     
@@ -94,7 +94,7 @@ def load_data(data_folder):
             wind_df = import_data_from_asc(wind_path, 'windspeed_' + wind_file.split("_")[-1][:-4]).resample('1s').ffill()
             power_df = import_data_from_asc(power_path, 'power_' + power_file.split("_")[-1][:-4]).resample('1s').ffill()
             pitch_df = import_data_from_asc(pitch_path, 'pitch_' + pitch_file.split("_")[-1][:-4]).resample('1s').ffill()
-            operation_state_df = import_data_from_asc(operation_state_path, 'operation_state_' + operation_state_file.split("_")[-1][:-4]).resample('1s').mean()
+            operation_state_df = import_data_from_asc(operation_state_path, 'operation_state_' + operation_state_file.split("_")[-1][:-4]).resample('1s').ffill()
             yaw_dfs.append(yaw_df)
             wind_dfs.append(wind_df)
             power_dfs.append(power_df)
@@ -147,6 +147,7 @@ non_nan_power_data = filtered_data[power_columns].dropna()
 sampled_power_data = non_nan_power_data.sample(10)
 print("Sample of 10 random non-NaN power values:")
 print(sampled_power_data)
+print(filtered_data['power_3'][:])
 
 
 # print("Power: ", combined_data['power_3'].describe())
