@@ -59,10 +59,10 @@ n_selected = len(var_keys_to_process)
 # incl. end date
 # start_date = '2023-06-01'
 # end_date = '2023-07-31'
-# start_date = '2023-09-01'
-# end_date = '2023-11-19'
-start_date = '2023-11-20'
-end_date = '2024-01-31'
+start_date = '2023-09-01'
+end_date = '2023-11-19'
+# start_date = '2023-11-20'
+# end_date = '2024-01-31'
 
 # id_str = '230901_231120'
 id_str = start_date + '_' + end_date
@@ -81,7 +81,7 @@ n_rows_to_load = None
 # can be '1s', '10s', '60s', ..., or None (for irregular data)
 # resample_str_list = [1, 10, 60, 600, 3600]
 # resample_str_list = [60, 600, 3600]
-resample_str_list = [10]
+resample_str_list = [1]
 # resample_str_list = [600]
 resample_str_list = [str(t_) + 's' for t_ in resample_str_list]
 # resample_str_list = [None]
