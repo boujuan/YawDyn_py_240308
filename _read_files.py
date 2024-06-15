@@ -12,13 +12,12 @@ def import_data_from_asc(file_path, sensor_name):
     data.set_index(pd.to_datetime(data['time'], format='%d.%m.%y %H:%M:%S'), inplace=True)
     data.drop(columns=['time'], inplace=True)
     data[sensor_name] = data[sensor_name].str.strip().astype('float')
-    data = data.groupby(data.index).mean()  # Average values for repeated timestamps
     data_resampled = data.resample('1s').mean()
     print(f"Data for {sensor_name} loaded and resampled. Shape: {data_resampled.shape}")
     return data_resampled
 
 def filter_and_fill_data(df, power_range=(500, 4900), pitch_range=(0, 2), operation_state_value=6, controller_state_value=1,
-                         apply_power_filter=0, apply_pitch_filter=1, apply_operation_state_filter=1, apply_controller_state_filter=1):
+                         apply_power_filter=1, apply_pitch_filter=1, apply_operation_state_filter=1, apply_controller_state_filter=1):
     # Initialize the filter with all True values (no filtering)
     filter_mask = pd.Series(True, index=df.index)
     
@@ -131,16 +130,24 @@ def load_data(data_folder):
 data_folder = "Data/raw/2023-06-01_2023-07-31"
 combined_data = load_data(data_folder)
 combined_data = combined_data.ffill()
-combined_data.to_csv('combined_data.csv', index=True)
+# combined_data.to_csv('combined_data.csv', index=True)
 
-filtered_data = filter_and_fill_data(combined_data, power_range=(500, 4900), pitch_range=(-1, 3), operation_state_value=6, controller_state_value=1)
-filtered_data.to_csv('filtered_data.csv', index=True)
+filtered_data = filter_and_fill_data(combined_data, power_range=(500, 4900), pitch_range=(0, 2), operation_state_value=6, controller_state_value=1)
+# filtered_data.to_csv('filtered_data.csv', index=True)
 
 print("head: ", filtered_data.head())
 print("tail: ", filtered_data.tail())
 print("columns: ", filtered_data.columns)
 print("shape: ", filtered_data.shape)
 print("sample: ", filtered_data.sample(10))
+print("----------------------------------")
+# Print a sample of 10 random non-NaN power values from the filtered data
+power_columns = [col for col in filtered_data.columns if 'power_' in col]
+non_nan_power_data = filtered_data[power_columns].dropna()
+sampled_power_data = non_nan_power_data.sample(10)
+print("Sample of 10 random non-NaN power values:")
+print(sampled_power_data)
+
 
 # print("Power: ", combined_data['power_3'].describe())
 
