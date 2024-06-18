@@ -8,6 +8,8 @@ import os
 
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
+
 
 # INFO: TASK 3:
 
@@ -34,13 +36,111 @@ def plot_identified_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, 
 
         fig.update_layout(title=f"Yaw Maneuvers and Wind Speed for Turbine {turb_key}", xaxis_title='Time', yaxis1_title='Yaw Angle (degrees)', yaxis2_title='Wind Speed (m/s)')
         fig.write_html(f"{path2dir_yaw_maneuvers}/{turb_key}_yaw_maneuvers_interactive.html")
+        
+def analyze_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, date_range_total_str, resample_str):
+    path2dir_yaw_maneuvers = f"{path2dir_fig_base}/analyzed_yaw_maneuvers/{date_range_total_str}_{resample_str}"
+    make_dir_if_not_exists(path2dir_yaw_maneuvers)
+
+    results = []
+
+    for turb_key in yaw_data.columns:
+        yaw_filt = yaw_data[turb_key]
+        wind_speed_filt = wind_speed_data[f'windspeed_{turb_key.split("_")[-1]}']
+        yaw_man, yaw_length, yaw_duration = find_yaw_maneuver(yaw_filt)
+
+        for start, stop in zip(yaw_man[yaw_man == 'cw_start'].index, yaw_man[yaw_man == 'cw_stop'].index):
+            if start and stop:
+                start_period = start - pd.Timedelta(seconds=60)
+                stop_period = stop + pd.Timedelta(seconds=60)
+                yaw_chunk = yaw_filt[start_period:stop_period]
+                wind_speed_chunk = wind_speed_filt[start_period:stop_period]
+
+                wind_speed_offset = wind_speed_chunk.iloc[-1] - wind_speed_chunk.iloc[0]
+                relative_change = (wind_speed_chunk.pct_change().mean()) * 100
+
+                results.append({
+                    'Turbine': turb_key,
+                    'Maneuver Start': start,
+                    'Maneuver Stop': stop,
+                    'Yaw Length (degrees)': yaw_length[start],
+                    'Yaw Duration (seconds)': yaw_duration[start],
+                    'Wind Speed Offset': wind_speed_offset,
+                    'Relative Change of Wind Speed (%)': relative_change
+                })
+
+    results_df = pd.DataFrame(results)
+    results_df.to_csv(f"{path2dir_yaw_maneuvers}/maneuver_analysis_results.csv", index=False)
+
+    # Plotting bins
+    plt.figure(figsize=(10, 6))
+    for length_bin in pd.cut(results_df['Yaw Length (degrees)'], bins=10).unique():
+        bin_data = results_df[pd.cut(results_df['Yaw Length (degrees)'], bins=10) == length_bin]
+        plt.bar(str(length_bin), bin_data['Relative Change of Wind Speed (%)'].mean(), yerr=bin_data['Relative Change of Wind Speed (%)'].std())
+
+    plt.xlabel('Yaw Length (degrees) Bins')
+    plt.ylabel('Average Relative Change of Wind Speed (%)')
+    plt.title('Relative Change of Wind Speed by Yaw Length Bins')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(f"{path2dir_yaw_maneuvers}/Relative_Change_by_Yaw_Length.png")
+    plt.show()
+
+    return results_df
+
+def plot_yaw_misalignment_histogram(yaw_data, wind_direction_data, path2dir_fig_base, date_range_total_str, resample_str):
+    path2dir_yaw_misalignment = f"{path2dir_fig_base}/yaw_misalignment/{date_range_total_str}_{resample_str}"
+    make_dir_if_not_exists(path2dir_yaw_misalignment)
+
+    for turb_key in yaw_data.columns:
+        yaw_filt = yaw_data[turb_key]
+        wind_dir_filt = wind_direction_data[f'winddir_{turb_key.split("_")[-1]}']
+        
+        # Calculate yaw misalignment
+        yaw_misalignment = (yaw_filt - wind_dir_filt).apply(lambda x: (x + 180) % 360 - 180)
+        
+        # Filter data around the plateau (300 to 320 degrees)
+        plateau_mask = (wind_dir_filt >= 300) & (wind_dir_filt <= 320)
+        yaw_misalignment_plateau = yaw_misalignment[plateau_mask]
+        
+        # Plot histogram
+        plt.figure(figsize=(10, 6))
+        plt.hist(yaw_misalignment_plateau, bins=30, edgecolor='black')
+        plt.xlabel('Yaw Misalignment (degrees)')
+        plt.ylabel('Frequency')
+        plt.title(f'Yaw Misalignment Histogram for Turbine {turb_key} (Wind Direction 300-320 degrees)')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"{path2dir_yaw_misalignment}/{turb_key}_yaw_misalignment_histogram.png")
+        plt.show()
+        
+def plot_yaw_scatter_around_plateau(yaw_data, wind_direction_data, path2dir_fig_base, date_range_total_str, resample_str):
+    path2dir_yaw_scatter = f"{path2dir_fig_base}/yaw_scatter/{date_range_total_str}_{resample_str}"
+    make_dir_if_not_exists(path2dir_yaw_scatter)
+
+    for turb_key in yaw_data.columns:
+        yaw_filt = yaw_data[turb_key]
+        wind_dir_filt = wind_direction_data[f'winddir_{turb_key.split("_")[-1]}']
+        
+        # Filter data around the plateau (300 to 320 degrees)
+        plateau_mask = (wind_dir_filt >= 300) & (wind_dir_filt <= 320)
+        yaw_plateau = yaw_filt[plateau_mask]
+        
+        # Resample to 60-second means
+        yaw_plateau_resampled = yaw_plateau.resample('60s').mean()
+        
+        # Plot scatter
+        plt.figure(figsize=(10, 6))
+        plt.scatter(yaw_plateau_resampled.index, yaw_plateau_resampled, alpha=0.5)
+        plt.xlabel('Time')
+        plt.ylabel('Yaw Angle (degrees)')
+        plt.title(f'60-Second Resampling Mean of Yaw Angles for Turbine {turb_key} (Wind Direction 300-320 degrees)')
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(f"{path2dir_yaw_scatter}/{turb_key}_yaw_scatter.png")
+        plt.show()
 
 # INFO: Algorithm from Andreas
 def find_yaw_maneuver(yaw_filt):
-    # INPUT: yaw_filt (pandas.Series): Filtered series of yaw angles
-    # OUTPUT: yaw_man (pandas.Series): Series of yaw maneuver events (cw_start, cw_stop, ccw_start, ccw_stop)
-    #         yaw_length (pandas.Series): Series of yaw maneuver lengths
-    #         yaw_duration (pandas.Series): Series of yaw maneuver durations
     
     ### DEBUG
     print("yaw_filt:")
