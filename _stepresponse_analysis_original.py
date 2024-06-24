@@ -1,41 +1,12 @@
 import pandas as pd
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
 from plot_tools import make_dir_if_not_exists
 import datetime
 import numpy as np
 import os
 
-import plotly.graph_objs as go
-from plotly.subplots import make_subplots
+#import plotly.graph_objs as go
+#from plotly.subplots import make_subplots
 import matplotlib.pyplot as plt
-
-
-# INFO: TASK 3:
-
-def plot_identified_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, date_range_total_str, resample_str):
-    path2dir_yaw_maneuvers = f"{path2dir_fig_base}/identified_yaw_maneuvers/{date_range_total_str}_{resample_str}"
-    make_dir_if_not_exists(path2dir_yaw_maneuvers)
-
-    for turb_key in yaw_data.columns:
-        print(turb_key)
-        yaw_filt = yaw_data[turb_key]
-        wind_speed_filt = wind_speed_data[f'windspeed_{turb_key.split("_")[-1]}']
-        yaw_man, yaw_length, yaw_duration = find_yaw_maneuver(yaw_filt)
-
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1)
-        fig.add_trace(go.Scatter(x=yaw_filt.index, y=yaw_filt, mode='lines', name='Yaw Angle'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=wind_speed_filt.index, y=wind_speed_filt, mode='lines', name='Wind Speed'), row=2, col=1)
-
-        # Add markers for the start and stop of each maneuver
-        starts = yaw_man[yaw_man == 'cw_start'].index.union(yaw_man[yaw_man == 'ccw_start'].index)
-        stops = yaw_man[yaw_man == 'cw_stop'].index.union(yaw_man[yaw_man == 'ccw_stop'].index)
-
-        fig.add_trace(go.Scatter(x=starts, y=yaw_filt.loc[starts], mode='markers', marker=dict(color='green', size=10), name='Start'), row=1, col=1)
-        fig.add_trace(go.Scatter(x=stops, y=yaw_filt.loc[stops], mode='markers', marker=dict(color='red', size=10), name='Stop'), row=1, col=1)
-
-        fig.update_layout(title=f"Yaw Maneuvers and Wind Speed for Turbine {turb_key}", xaxis_title='Time', yaxis1_title='Yaw Angle (degrees)', yaxis2_title='Wind Speed (m/s)')
-        fig.write_html(f"{path2dir_yaw_maneuvers}/{turb_key}_yaw_maneuvers_interactive.html")
         
 def analyze_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, date_range_total_str, resample_str):
     path2dir_yaw_maneuvers = f"{path2dir_fig_base}/analyzed_yaw_maneuvers/{date_range_total_str}_{resample_str}"
@@ -46,98 +17,94 @@ def analyze_yaw_maneuvers(yaw_data, wind_speed_data, path2dir_fig_base, date_ran
     for turb_key in yaw_data.columns:
         yaw_filt = yaw_data[turb_key]
         wind_speed_filt = wind_speed_data[f'windspeed_{turb_key.split("_")[-1]}']
-        yaw_man, yaw_length, yaw_duration = find_yaw_maneuver(yaw_filt)
+        yaw_man, yaw_lengths, yaw_durations = find_yaw_maneuver(yaw_filt)
+        
+        # Process both cw and ccw maneuvers
+        for maneuver_type in ['cw', 'ccw']:
+            start_indices = yaw_man[yaw_man == f'{maneuver_type}_start'].index
+            stop_indices = yaw_man[yaw_man == f'{maneuver_type}_stop'].index
+            
+            for start, stop in zip(start_indices, stop_indices):
+                if start and stop:
+                    yaw_length = np.mod(yaw_filt.loc[stop] - yaw_filt.loc[start] + 180, 360) - 180
+                    start_period = start - pd.Timedelta(seconds=60)
+                    stop_period = stop + pd.Timedelta(seconds=60)
+                    
+                    wind_speed_chunk_before = wind_speed_filt[start_period:start].mean()                
+                    wind_speed_chunk_after = wind_speed_filt[stop:stop_period].mean()
 
-        for start, stop in zip(yaw_man[yaw_man == 'cw_start'].index, yaw_man[yaw_man == 'cw_stop'].index):
-            if start and stop:
-                start_period = start - pd.Timedelta(seconds=60)
-                stop_period = stop + pd.Timedelta(seconds=60)
-                yaw_chunk = yaw_filt[start_period:stop_period]
-                wind_speed_chunk = wind_speed_filt[start_period:stop_period]
+                    wind_speed_offset = wind_speed_chunk_after - wind_speed_chunk_before
+                    relative_change = wind_speed_chunk_after / wind_speed_chunk_before
 
-                wind_speed_offset = wind_speed_chunk.iloc[-1] - wind_speed_chunk.iloc[0]
-                relative_change = (wind_speed_chunk.pct_change().mean()) * 100
-
-                results.append({
-                    'Turbine': turb_key,
-                    'Maneuver Start': start,
-                    'Maneuver Stop': stop,
-                    'Yaw Length (degrees)': yaw_length[start],
-                    'Yaw Duration (seconds)': yaw_duration[start],
-                    'Wind Speed Offset': wind_speed_offset,
-                    'Relative Change of Wind Speed (%)': relative_change
-                })
+                    results.append({
+                        'Turbine': turb_key,
+                        'Maneuver Start': start,
+                        'Maneuver Stop': stop,
+                        'Yaw Length': yaw_length,
+                        'Yaw Duration': (stop - start).total_seconds(),
+                        'Wind Speed Offset': wind_speed_offset,
+                        'Relative Wind Speed Change': relative_change,
+                        'Maneuver Type': maneuver_type
+                    })
 
     results_df = pd.DataFrame(results)
     results_df.to_csv(f"{path2dir_yaw_maneuvers}/maneuver_analysis_results.csv", index=False)
 
-    # Plotting bins
-    plt.figure(figsize=(10, 6))
-    for length_bin in pd.cut(results_df['Yaw Length (degrees)'], bins=10).unique():
-        bin_data = results_df[pd.cut(results_df['Yaw Length (degrees)'], bins=10) == length_bin]
-        plt.bar(str(length_bin), bin_data['Relative Change of Wind Speed (%)'].mean(), yerr=bin_data['Relative Change of Wind Speed (%)'].std())
+    # Plotting
+    fig, axs = plt.subplots(3, 1, figsize=(10, 18))
+    for i, maneuver_type in enumerate(['cw', 'ccw', 'combined']):
+        if maneuver_type != 'combined':
+            subset = results_df[results_df['Maneuver Type'] == maneuver_type]
+        else:
+            subset = results_df
+        
+        if len(subset) > 1:  # Check if there's enough data to plot
+            ax2 = axs[i].twinx()  # Create a twin Axes sharing the xaxis
+            
+            # Remove NaN values for fitting
+            valid_data = subset.dropna(subset=['Yaw Length', 'Wind Speed Offset', 'Relative Wind Speed Change'])
+            
+            axs[i].scatter(valid_data['Yaw Length'], valid_data['Wind Speed Offset'], label=f'{maneuver_type} maneuvers', color='blue')
+            ax2.scatter(valid_data['Yaw Length'], valid_data['Relative Wind Speed Change'], label=f'{maneuver_type} maneuvers (Relative Change)', color='green', marker='x')
+            
+            mean_value = valid_data['Wind Speed Offset'].mean()
+            axs[i].axhline(mean_value, color='r', linestyle='--', label=f'Mean Offset: {mean_value:.2f}')
+            
+            # Fit and plot trend lines for Wind Speed Offset and Relative Wind Speed Change
+            if len(valid_data) > 1:  # Ensure we have at least 2 points for fitting
+                # Wind Speed Offset (blue)
+                z_offset = np.polyfit(valid_data['Yaw Length'], valid_data['Wind Speed Offset'], 1)
+                p_offset = np.poly1d(z_offset)
+                x_range = np.linspace(valid_data['Yaw Length'].min(), valid_data['Yaw Length'].max(), 100)
+                axs[i].plot(x_range, p_offset(x_range), "b--", 
+                            label=f'Trend Offset: {z_offset[0]:.2f}x + {z_offset[1]:.2f}')
+                
+                # Relative Wind Speed Change (green)
+                z_relative = np.polyfit(valid_data['Yaw Length'], valid_data['Relative Wind Speed Change'], 1)
+                p_relative = np.poly1d(z_relative)
+                ax2.plot(x_range, p_relative(x_range), "g--", 
+                         label=f'Trend Relative: {z_relative[0]:.2f}x + {z_relative[1]:.2f}')
+            else:
+                print(f"Not enough valid data points to fit trend lines for {maneuver_type} maneuvers")
+            
+            # Labels and titles
+            axs[i].set_xlabel('Yaw Length')
+            axs[i].set_ylabel('Wind Speed Offset')
+            ax2.set_ylabel('Relative Wind Speed Change', color='green')
+            axs[i].set_title(f'{maneuver_type.capitalize()} Maneuvers: Yaw Length vs Wind Speed Offset and Relative Change')
+            
+            # Legends
+            axs[i].legend(loc='upper left')
+            ax2.legend(loc='upper right')
+        else:
+            axs[i].text(0.5, 0.5, f'No data for {maneuver_type} maneuvers', 
+                        horizontalalignment='center', verticalalignment='center', transform=axs[i].transAxes)
 
-    plt.xlabel('Yaw Length (degrees) Bins')
-    plt.ylabel('Average Relative Change of Wind Speed (%)')
-    plt.title('Relative Change of Wind Speed by Yaw Length Bins')
-    plt.xticks(rotation=45)
     plt.tight_layout()
-    plt.savefig(f"{path2dir_yaw_maneuvers}/Relative_Change_by_Yaw_Length.png")
+    plt.savefig(f"{path2dir_yaw_maneuvers}/Yaw_Maneuvers_Analysis.png")
     plt.show()
 
     return results_df
-
-def plot_yaw_misalignment_histogram(yaw_data, wind_direction_data, path2dir_fig_base, date_range_total_str, resample_str):
-    path2dir_yaw_misalignment = f"{path2dir_fig_base}/yaw_misalignment/{date_range_total_str}_{resample_str}"
-    make_dir_if_not_exists(path2dir_yaw_misalignment)
-
-    for turb_key in yaw_data.columns:
-        yaw_filt = yaw_data[turb_key]
-        wind_dir_filt = wind_direction_data[f'winddir_{turb_key.split("_")[-1]}']
-        
-        # Calculate yaw misalignment
-        yaw_misalignment = (yaw_filt - wind_dir_filt).apply(lambda x: (x + 180) % 360 - 180)
-        
-        # Filter data around the plateau (300 to 320 degrees)
-        plateau_mask = (wind_dir_filt >= 300) & (wind_dir_filt <= 320)
-        yaw_misalignment_plateau = yaw_misalignment[plateau_mask]
-        
-        # Plot histogram
-        plt.figure(figsize=(10, 6))
-        plt.hist(yaw_misalignment_plateau, bins=30, edgecolor='black')
-        plt.xlabel('Yaw Misalignment (degrees)')
-        plt.ylabel('Frequency')
-        plt.title(f'Yaw Misalignment Histogram for Turbine {turb_key} (Wind Direction 300-320 degrees)')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(f"{path2dir_yaw_misalignment}/{turb_key}_yaw_misalignment_histogram.png")
-        plt.show()
-        
-def plot_yaw_scatter_around_plateau(yaw_data, wind_direction_data, path2dir_fig_base, date_range_total_str, resample_str):
-    path2dir_yaw_scatter = f"{path2dir_fig_base}/yaw_scatter/{date_range_total_str}_{resample_str}"
-    make_dir_if_not_exists(path2dir_yaw_scatter)
-
-    for turb_key in yaw_data.columns:
-        yaw_filt = yaw_data[turb_key]
-        wind_dir_filt = wind_direction_data[f'winddir_{turb_key.split("_")[-1]}']
-        
-        # Filter data around the plateau (300 to 320 degrees)
-        plateau_mask = (wind_dir_filt >= 300) & (wind_dir_filt <= 320)
-        yaw_plateau = yaw_filt[plateau_mask]
-        
-        # Resample to 60-second means
-        yaw_plateau_resampled = yaw_plateau.resample('60s').mean()
-        
-        # Plot scatter
-        plt.figure(figsize=(10, 6))
-        plt.scatter(yaw_plateau_resampled.index, yaw_plateau_resampled, alpha=0.5)
-        plt.xlabel('Time')
-        plt.ylabel('Yaw Angle (degrees)')
-        plt.title(f'60-Second Resampling Mean of Yaw Angles for Turbine {turb_key} (Wind Direction 300-320 degrees)')
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(f"{path2dir_yaw_scatter}/{turb_key}_yaw_scatter.png")
-        plt.show()
 
 # INFO: Algorithm from Andreas
 def find_yaw_maneuver(yaw_filt):
@@ -200,6 +167,7 @@ def find_yaw_maneuver(yaw_filt):
             ccw_stop = ccw_stop[1:]
         if ccw_start[-1]>ccw_stop[-1]:
             ccw_start = ccw_start[:-1]
+            
     yaw_man = pd.Series(data=np.full(len(yaw_filt),np.nan,dtype=object),index=yaw_filt.index) # Stores strings indicating yaw maneuver events (cw_start, cw_stop, ccw_start, ccw_stop)
     yaw_man[cw_start]='cw_start'
     yaw_man[ccw_start]='ccw_start'
@@ -215,77 +183,23 @@ def find_yaw_maneuver(yaw_filt):
     # DEBUG
     print("yaw_duration[cw_start]:")
     print(yaw_duration[cw_start])
+    print("yaw_duration[ccw_start]:")
+    print(yaw_duration[ccw_start])    
     
-    id_bad = (yaw_duration[cw_start] <=10).values
+    id_bad = (yaw_duration[cw_start] <=4).values
+    id_bad_ccw = (yaw_duration[ccw_start] <=4).values
     yaw_man[cw_start][id_bad]= np.nan
     yaw_man[cw_stop][id_bad]= np.nan
     yaw_length[cw_start][id_bad] = np.nan
     yaw_length[cw_stop][id_bad] = np.nan
     yaw_duration[cw_start][id_bad] = np.nan
     yaw_duration[cw_start][id_bad] = np.nan
+    yaw_man[ccw_start][id_bad_ccw]= np.nan
+    yaw_man[ccw_stop][id_bad_ccw]= np.nan
+    yaw_length[ccw_start][id_bad_ccw] = np.nan
+    yaw_length[ccw_stop][id_bad_ccw] = np.nan
+    yaw_duration[ccw_start][id_bad_ccw] = np.nan
+    yaw_duration[ccw_start][id_bad_ccw] = np.nan
 
 
     return yaw_man, yaw_length, yaw_duration
-
-# def load_yaw_data():
-#     data_folders = [
-#         "Data/raw/2023-06-01_2023-07-31",
-#         "Data/raw/2023-09-01_2023-11-19",
-#         "Data/raw/2023-11-20_2024-01-31",
-#     ]
-#     file_names = [
-#         "VA_YawPositionModulus_N3_3.ASC",
-#         "VA_YawPositionModulus_N3_4.ASC",
-#         "VA_YawPositionModulus_N3_5.ASC",
-#         "VA_YawPositionModulus_N3_6.ASC",
-#     ]
-
-#     dfs = []
-#     for folder in data_folders:
-#         for file_name in file_names:
-#             file_path = os.path.join(folder, file_name)
-#             try:
-#                 df = pd.read_csv(
-#                     file_path,
-#                     sep=";",
-#                     header=None,
-#                     names=["timestamp", file_name.split("_")[-1][:-4]],
-#                     parse_dates=["timestamp"],
-#                     date_parser=lambda x: pd.datetime.strptime(x, "%d.%m.%y %H:%M:%S"),
-#                 )
-#                 dfs.append(df)
-#             except FileNotFoundError:
-#                 print(f"File not found: {file_path}")
-
-#     if dfs:
-#         combined_df = pd.concat(dfs, axis=1)
-#         combined_df = combined_df.ffill().asfreq("S")
-#         return combined_df
-#     else:
-#         return None
-
-# def main():
-#     yaw_data = load_yaw_data()
-#     turb_keys_to_process = ['N3_3', 'N3_4', 'N3_5', 'N3_6']
-#     path2dir_fig_base = 'Figures/identified_yaw_maneuvers'
-#     date_range_total_str = '2023-06-01_2024-01-31'
-#     resample_str = '1s'
-
-#     for ctrl_key in df_filt_yaw_dict.keys():
-#         for turb_key in turb_keys_to_process:
-#             if turb_key in yaw_data.columns:
-#                 yaw_filt = yaw_data[turb_key]
-#                 yaw_man, yaw_length, yaw_duration = find_yaw_maneuver(yaw_filt)
-
-#                 plot_identified_yaw_maneuvers(
-#                     {ctrl_key: {turb_key: yaw_filt}},
-#                     [turb_key],
-#                     path2dir_fig_base,
-#                     date_range_total_str,
-#                     resample_str
-#                 )
-
-# if __name__ == "__main__":
-#     main()
-
-

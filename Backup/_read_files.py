@@ -2,9 +2,9 @@
 import os
 
 import pandas as pd
-from _stepresponse_analysis_original import analyze_yaw_maneuvers
+from _stepresponse_analysis_original import plot_identified_yaw_maneuvers, analyze_yaw_maneuvers, plot_yaw_misalignment_histogram, plot_yaw_scatter_around_plateau
 
-os.chdir('..') # Temporal fix to go back one folder for the interactive cell run
+os.chdir('..')
 
 # INFO: Import raw data
 def import_data_from_asc(file_path, sensor_name):
@@ -158,14 +158,23 @@ non_nan_power_data = filtered_data[power_columns].dropna()
 sampled_power_data = non_nan_power_data.sample(10)
 print("Sample of 10 random non-NaN power values:")
 print(sampled_power_data)
+#print(filtered_data['power_3'][:])
 
-print("="*20)
+
+# print("Power: ", combined_data['power_3'].describe())
 
 if filtered_data is not None:
     path2dir_fig_base = 'Figures/identified_yaw_maneuvers'
     date_range_total_str = '2023-06-01_2023-07-31'
     resample_str = '1s'
 
+    # plot_identified_yaw_maneuvers(
+    #     filtered_data[['yaw_3', 'yaw_4', 'yaw_5', 'yaw_6']],
+    #     filtered_data[['windspeed_3', 'windspeed_4', 'windspeed_5', 'windspeed_6']],
+    #     path2dir_fig_base,
+    #     date_range_total_str,
+    #     resample_str
+    # )
     results = analyze_yaw_maneuvers(
         filtered_data[['yaw_4']],
         filtered_data[['windspeed_4']],
@@ -177,4 +186,20 @@ if filtered_data is not None:
     results_sem = results['Wind Speed Offset'].sem()
     print("Mean: ", results_mean)
     print("SEM: ", results_sem)
+    
+    # plot_yaw_misalignment_histogram(
+    #     filtered_data[['yaw_4']],
+    #     filtered_data[['winddir_4']],
+    #     path2dir_fig_base,
+    #     date_range_total_str,
+    #     resample_str
+    # )
+    
+    # plot_yaw_scatter_around_plateau(
+    #     filtered_data[['yaw_4']],
+    #     filtered_data[['winddir_4']],
+    #     path2dir_fig_base,
+    #     date_range_total_str,
+    #     resample_str
+    # )
 # %%
